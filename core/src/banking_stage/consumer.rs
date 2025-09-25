@@ -4,6 +4,7 @@ use {
         leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
         qos_service::QosService,
         scheduler_messages::MaxAge,
+        timing_exporter::{TimingExporter, TransactionTiming},
     },
     itertools::Itertools,
     solana_clock::MAX_PROCESSING_AGE,
@@ -75,6 +76,7 @@ pub struct Consumer {
     transaction_recorder: TransactionRecorder,
     qos_service: QosService,
     log_messages_bytes_limit: Option<usize>,
+    timing_exporter: Option<TimingExporter>,
 }
 
 impl Consumer {
@@ -89,6 +91,23 @@ impl Consumer {
             transaction_recorder,
             qos_service,
             log_messages_bytes_limit,
+            timing_exporter: None,
+        }
+    }
+
+    pub fn new_with_timing_exporter(
+        committer: Committer,
+        transaction_recorder: TransactionRecorder,
+        qos_service: QosService,
+        log_messages_bytes_limit: Option<usize>,
+        timing_exporter: TimingExporter,
+    ) -> Self {
+        Self {
+            committer,
+            transaction_recorder,
+            qos_service,
+            log_messages_bytes_limit,
+            timing_exporter: Some(timing_exporter),
         }
     }
 
@@ -407,6 +426,17 @@ impl Consumer {
 
         drop(freeze_lock);
 
+        // Export timing data for MEV analysis if timing exporter is configured
+        if let Some(ref timing_exporter) = self.timing_exporter {
+            self.export_timing_data(
+                timing_exporter,
+                bank,
+                batch.sanitized_transactions(),
+                &processing_results,
+                &commit_transaction_statuses,
+            );
+        }
+
         debug!(
             "bank: {} process_and_record_locked: {}us record: {}us commit: {}us txs_len: {}",
             bank.slot(),
@@ -470,6 +500,69 @@ impl Consumer {
             bank.rent_collector(),
             fee,
         )
+    }
+
+    /// Export timing data for MEV analysis
+    /// 
+    /// This method extracts transaction timing information including POH tick heights,
+    /// account access patterns, and execution success status for external analysis.
+    fn export_timing_data(
+        &self,
+        timing_exporter: &TimingExporter,
+        bank: &Arc<Bank>,
+        transactions: &[impl TransactionWithMeta],
+        processing_results: &[impl TransactionProcessingResultExtensions],
+        commit_statuses: &[CommitTransactionDetails],
+    ) {
+        for (index, (transaction, processing_result)) in
+            transactions.iter().zip(processing_results.iter()).enumerate()
+        {
+            // Only export timing data for transactions that were processed
+            if !processing_result.was_processed() {
+                continue;
+            }
+
+            // Determine if transaction was successfully committed
+            let execution_success = matches!(
+                commit_statuses.get(index).unwrap_or(&CommitTransactionDetails::NotCommitted),
+                CommitTransactionDetails::Committed { .. }
+            ) && processing_result.was_executed_successfully();
+
+            // Extract account access patterns
+            let message = transaction.message();
+            let accounts_read: Vec<String> = message
+                .static_account_keys()
+                .iter()
+                .map(|pubkey| pubkey.to_string())
+                .collect();
+
+            // Get accounts that were written to (simplified - includes all writable accounts)
+            let accounts_written: Vec<String> = message
+                .static_account_keys()
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, pubkey)| {
+                    if message.is_maybe_writable(idx) {
+                        Some(pubkey.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Create timing data structure
+            let timing_data = TransactionTiming {
+                signature: transaction.signature().to_string(),
+                slot: bank.slot(),
+                poh_tick: bank.tick_height(), // POH entry commitment time (true order)
+                accounts_read,
+                accounts_written,
+                execution_success,
+            };
+
+            // Export asynchronously (non-blocking)
+            timing_exporter.export_async(timing_data);
+        }
     }
 }
 

@@ -61,6 +61,7 @@ pub mod committer;
 pub mod consumer;
 pub mod leader_slot_metrics;
 pub mod qos_service;
+pub mod timing_exporter;
 pub mod vote_storage;
 
 mod consume_worker;
