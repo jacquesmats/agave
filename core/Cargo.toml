@@ -72,11 +72,13 @@ quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 rolling-file = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
+serde_json = { workspace = true }
 slab = { workspace = true }
 solana-account = { workspace = true }
 solana-accounts-db = { workspace = true }
@@ -182,7 +184,6 @@ sysctl = { workspace = true }
 agave-reserved-account-keys = { workspace = true }
 criterion = { workspace = true }
 fs_extra = { workspace = true }
-serde_json = { workspace = true }
 serial_test = { workspace = true }
 solana-account = { workspace = true, features = ["dev-context-only-utils"] }
 # See order-crates-for-publishing.py for using this unusual `path = "."`
