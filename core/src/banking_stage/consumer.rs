@@ -432,7 +432,6 @@ impl Consumer {
                 timing_exporter,
                 bank,
                 batch.sanitized_transactions(),
-                &processing_results,
                 &commit_transaction_statuses,
             );
         }
@@ -511,38 +510,29 @@ impl Consumer {
         timing_exporter: &TimingExporter,
         bank: &Arc<Bank>,
         transactions: &[impl TransactionWithMeta],
-        processing_results: &[impl TransactionProcessingResultExtensions],
         commit_statuses: &[CommitTransactionDetails],
     ) {
-        for (index, (transaction, processing_result)) in
-            transactions.iter().zip(processing_results.iter()).enumerate()
-        {
-            // Only export timing data for transactions that were processed
-            if !processing_result.was_processed() {
-                continue;
-            }
-
+        for (index, transaction) in transactions.iter().enumerate() {
             // Determine if transaction was successfully committed
             let execution_success = matches!(
                 commit_statuses.get(index).unwrap_or(&CommitTransactionDetails::NotCommitted),
                 CommitTransactionDetails::Committed { .. }
-            ) && processing_result.was_executed_successfully();
+            );
 
-            // Extract account access patterns
-            let message = transaction.message();
-            let accounts_read: Vec<String> = message
+            // Extract account access patterns from transaction message
+            let accounts_read: Vec<String> = transaction
                 .static_account_keys()
                 .iter()
                 .map(|pubkey| pubkey.to_string())
                 .collect();
 
-            // Get accounts that were written to (simplified - includes all writable accounts)
-            let accounts_written: Vec<String> = message
+            // Get accounts that were written to (includes all writable accounts)
+            let accounts_written: Vec<String> = transaction
                 .static_account_keys()
                 .iter()
                 .enumerate()
                 .filter_map(|(idx, pubkey)| {
-                    if message.is_maybe_writable(idx) {
+                    if transaction.is_writable(idx) {
                         Some(pubkey.to_string())
                     } else {
                         None

@@ -255,7 +255,7 @@ impl ExportTask {
     }
 
     async fn export_single(&self, timing_data: TransactionTiming) -> Result<(), ReqwestError> {
-        let response = timeout(
+        let response = match timeout(
             self.config.request_timeout,
             self.client
                 .post(&self.config.export_url)
@@ -263,17 +263,23 @@ impl ExportTask {
                 .send(),
         )
         .await
-        .map_err(|_| ReqwestError::from(reqwest::Error::from(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            "Request timeout",
-        ))))?;
+        {
+            Ok(result) => result?,
+            Err(_) => {
+                // Timeout occurred - return a custom error
+                return Err(reqwest::Error::from(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Request timeout during timing data export",
+                )));
+            }
+        };
 
         response?.error_for_status()?;
         Ok(())
     }
 
     async fn export_batch(&self, batch: Vec<TransactionTiming>) -> Result<(), ReqwestError> {
-        let response = timeout(
+        let response = match timeout(
             self.config.request_timeout,
             self.client
                 .post(&self.config.export_url)
@@ -281,10 +287,16 @@ impl ExportTask {
                 .send(),
         )
         .await
-        .map_err(|_| ReqwestError::from(reqwest::Error::from(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            "Request timeout",
-        ))))?;
+        {
+            Ok(result) => result?,
+            Err(_) => {
+                // Timeout occurred - return a custom error
+                return Err(reqwest::Error::from(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Request timeout during batch timing data export",
+                )));
+            }
+        };
 
         response?.error_for_status()?;
         Ok(())
