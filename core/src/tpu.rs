@@ -140,6 +140,7 @@ impl Tpu {
         enable_block_production_forwarding: bool,
         _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
         key_notifiers: Arc<RwLock<KeyUpdaters>>,
+	timing_export_url: Option<String>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -288,6 +289,7 @@ impl Tpu {
             log_messages_bytes_limit,
             bank_forks.clone(),
             prioritization_fee_cache,
+            timing_export_url,
         );
 
         let SpawnForwardingStageResult {
