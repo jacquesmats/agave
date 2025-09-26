@@ -255,50 +255,48 @@ impl ExportTask {
     }
 
     async fn export_single(&self, timing_data: TransactionTiming) -> Result<(), ReqwestError> {
-        let response = match timeout(
+        let result = timeout(
             self.config.request_timeout,
             self.client
                 .post(&self.config.export_url)
                 .json(&timing_data)
                 .send(),
         )
-        .await
-        {
-            Ok(result) => result?,
+        .await;
+
+        let response = match result {
+            Ok(response_result) => response_result?,
             Err(_) => {
-                // Timeout occurred - return a custom error
-                return Err(reqwest::Error::from(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "Request timeout during timing data export",
-                )));
+                // Timeout occurred - create a custom reqwest error
+		warn!("Request timeout occurred during timing data export");
+		return Ok(());
             }
         };
 
-        response?.error_for_status()?;
+        response.error_for_status()?;
         Ok(())
     }
 
     async fn export_batch(&self, batch: Vec<TransactionTiming>) -> Result<(), ReqwestError> {
-        let response = match timeout(
+        let result = timeout(
             self.config.request_timeout,
             self.client
                 .post(&self.config.export_url)
                 .json(&batch)
                 .send(),
         )
-        .await
-        {
-            Ok(result) => result?,
+        .await;
+
+        let response = match result {
+            Ok(response_result) => response_result?,
             Err(_) => {
-                // Timeout occurred - return a custom error
-                return Err(reqwest::Error::from(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "Request timeout during batch timing data export",
-                )));
+                // Timeout occurred - create a custom reqwest error
+		warn!("Request timeout occurred during timing data export");
+		return Ok(());
             }
         };
 
-        response?.error_for_status()?;
+        response.error_for_status()?;
         Ok(())
     }
 
