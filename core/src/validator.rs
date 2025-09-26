@@ -293,6 +293,7 @@ pub struct ValidatorConfig {
     pub delay_leader_block_for_pending_fork: bool,
     pub use_tpu_client_next: bool,
     pub retransmit_xdp: Option<XdpConfig>,
+    pub timing_export_url: Option<String>,
 }
 
 impl Default for ValidatorConfig {
@@ -368,6 +369,7 @@ impl Default for ValidatorConfig {
             delay_leader_block_for_pending_fork: false,
             use_tpu_client_next: true,
             retransmit_xdp: None,
+            timing_export_url: None,
         }
     }
 }

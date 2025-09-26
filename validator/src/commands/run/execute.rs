@@ -777,6 +777,7 @@ pub fn execute(
         wen_restart_coordinator: value_t!(matches, "wen_restart_coordinator", Pubkey).ok(),
         retransmit_xdp,
         use_tpu_client_next: !matches.is_present("use_connection_cache"),
+        timing_export_url: matches.value_of("timing_export_url").map(|s| s.to_string()),
         ..ValidatorConfig::default()
     };
 

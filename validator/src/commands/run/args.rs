@@ -994,6 +994,16 @@ pub fn add_args<'a>(app: App<'a, 'a>, default_args: &'a DefaultArgs) -> App<'a, 
             .help("Max encoding and decoding message size used in Bigtable Grpc client"),
     )
     .arg(
+        Arg::with_name("timing_export_url")
+            .long("timing-export-url")
+            .takes_value(true)
+            .value_name("URL")
+            .help(
+                "URL endpoint for exporting transaction timing data for MEV analysis. \
+                 Enables microsecond-precision POH tick timing export for arbitrage research",
+            ),
+    )
+    .arg(
         Arg::with_name("rpc_pubsub_worker_threads")
             .long("rpc-pubsub-worker-threads")
             .takes_value(true)

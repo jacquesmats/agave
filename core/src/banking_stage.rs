@@ -378,6 +378,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        timing_export_url: Option<String>,
     ) -> Self {
         Self::new_num_threads(
             block_production_method,
@@ -394,6 +395,7 @@ impl BankingStage {
             log_messages_bytes_limit,
             bank_forks,
             prioritization_fee_cache,
+            timing_export_url,
         )
     }
 
@@ -413,6 +415,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        timing_export_url: Option<String>,
     ) -> Self {
         match block_production_method {
             BlockProductionMethod::CentralScheduler
@@ -436,6 +439,7 @@ impl BankingStage {
                     log_messages_bytes_limit,
                     bank_forks,
                     prioritization_fee_cache,
+                    timing_export_url,
                 )
             }
         }
@@ -457,6 +461,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        timing_export_url: Option<String>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         let vote_storage = {
@@ -503,6 +508,7 @@ impl BankingStage {
                     num_threads,
                     log_messages_bytes_limit,
                     bank_forks,
+                    timing_export_url.clone(),
                 );
             }
             TransactionStructure::View => {
@@ -521,6 +527,7 @@ impl BankingStage {
                     num_threads,
                     log_messages_bytes_limit,
                     bank_forks,
+                    timing_export_url.clone(),
                 );
             }
         }
@@ -540,6 +547,7 @@ impl BankingStage {
         num_threads: u32,
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
+        timing_export_url: Option<String>,
     ) {
         // Create channels for communication between scheduler and workers
         let num_workers = (num_threads).saturating_sub(NUM_VOTE_PROCESSING_THREADS);
@@ -551,15 +559,35 @@ impl BankingStage {
         let mut worker_metrics = Vec::with_capacity(num_workers as usize);
         for (index, work_receiver) in work_receivers.into_iter().enumerate() {
             let id = (index as u32).saturating_add(NUM_VOTE_PROCESSING_THREADS);
-            let consume_worker = ConsumeWorker::new(
-                id,
-                work_receiver,
+            let consumer = if let Some(ref url) = timing_export_url {
+                use crate::banking_stage::timing_exporter::{TimingExporter, TimingExporterConfig};
+                
+                let config = TimingExporterConfig {
+                    export_url: url.clone(),
+                    ..Default::default()
+                };
+                let timing_exporter = TimingExporter::new(config);
+                
+                Consumer::new_with_timing_exporter(
+                    committer.clone(),
+                    transaction_recorder.clone(),
+                    QosService::new(id),
+                    log_messages_bytes_limit,
+                    timing_exporter,
+                )
+            } else {
                 Consumer::new(
                     committer.clone(),
                     transaction_recorder.clone(),
                     QosService::new(id),
                     log_messages_bytes_limit,
-                ),
+                )
+            };
+            
+            let consume_worker = ConsumeWorker::new(
+                id,
+                work_receiver,
+                consumer,
                 finished_work_sender.clone(),
                 poh_recorder.read().unwrap().new_leader_bank_notifier(),
             );
