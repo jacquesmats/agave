@@ -377,7 +377,6 @@ impl BankingStage {
         replay_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
-        timing_export_url: Option<String>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         timing_export_url: Option<String>,
     ) -> Self {
@@ -395,8 +394,8 @@ impl BankingStage {
             replay_vote_sender,
             log_messages_bytes_limit,
             bank_forks,
-            prioritization_fee_cache,
             timing_export_url,
+            prioritization_fee_cache,
         )
     }
 
@@ -415,7 +414,6 @@ impl BankingStage {
         replay_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
-        timing_export_url: Option<String>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         timing_export_url: Option<String>,
     ) -> Self {
@@ -440,8 +438,8 @@ impl BankingStage {
                     replay_vote_sender,
                     log_messages_bytes_limit,
                     bank_forks,
-                    prioritization_fee_cache,
-            timing_export_url,
+                    timing_export_url,
+            prioritization_fee_cache,
                 )
             }
         }
@@ -462,7 +460,6 @@ impl BankingStage {
         replay_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
-        timing_export_url: Option<String>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         timing_export_url: Option<String>,
     ) -> Self {
@@ -488,6 +485,7 @@ impl BankingStage {
             gossip_vote_receiver,
             decision_maker.clone(),
             bank_forks.clone(),
+            timing_export_url.clone(),
             committer.clone(),
             transaction_recorder.clone(),
             log_messages_bytes_limit,
@@ -511,6 +509,7 @@ impl BankingStage {
                     num_threads,
                     log_messages_bytes_limit,
                     bank_forks,
+                    timing_export_url.clone(),
                 );
             }
             TransactionStructure::View => {
@@ -529,6 +528,7 @@ impl BankingStage {
                     num_threads,
                     log_messages_bytes_limit,
                     bank_forks,
+                    timing_export_url.clone(),
                 );
             }
         }
@@ -669,7 +669,7 @@ impl BankingStage {
         gossip_receiver: BankingPacketReceiver,
         decision_maker: DecisionMaker,
         bank_forks: Arc<RwLock<BankForks>>,
-        timing_export_url: Option<String>,
+        _timing_export_url: Option<String>,
         committer: Committer,
         transaction_recorder: TransactionRecorder,
         log_messages_bytes_limit: Option<usize>,
