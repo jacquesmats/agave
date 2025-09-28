@@ -288,8 +288,8 @@ impl Tpu {
             replay_vote_sender,
             log_messages_bytes_limit,
             bank_forks.clone(),
-            timing_export_url,
             prioritization_fee_cache,
+            timing_export_url,
         );
 
         let SpawnForwardingStageResult {
