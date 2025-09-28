@@ -257,7 +257,7 @@ fn bench_banking(
         None,
         bank_forks,
         &Arc::new(PrioritizationFeeCache::new(0u64)),
-	None,
+        None, // No timing export for benchmark
     );
 
     let chunk_len = verified.len() / CHUNKS;

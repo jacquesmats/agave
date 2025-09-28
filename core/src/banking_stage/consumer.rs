@@ -550,10 +550,11 @@ impl Consumer {
                 execution_success,
             };
 
-            // Export asynchronously (non-blocking)
-            timing_exporter.export_async(timing_data);
+            // Export synchronously (blocking but fast with timeout)
+            timing_exporter.export_timing_data(timing_data);
         }
     }
+
 }
 
 #[cfg(test)]

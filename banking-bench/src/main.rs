@@ -477,7 +477,7 @@ fn main() {
         None,
         bank_forks.clone(),
         &prioritization_fee_cache,
-	None,
+        None, // No timing export for banking bench
     );
 
     // This is so that the signal_receiver does not go out of scope after the closure.

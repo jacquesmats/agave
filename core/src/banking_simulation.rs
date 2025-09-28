@@ -834,7 +834,7 @@ impl BankingSimulator {
             None,
             bank_forks.clone(),
             prioritization_fee_cache,
-	    None,
+            None, // No timing export for banking simulation
         );
 
         let (&_slot, &raw_base_event_time) = freeze_time_by_slot

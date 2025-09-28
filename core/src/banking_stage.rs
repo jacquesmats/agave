@@ -377,6 +377,7 @@ impl BankingStage {
         replay_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
+        timing_export_url: Option<String>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         timing_export_url: Option<String>,
     ) -> Self {
@@ -414,6 +415,7 @@ impl BankingStage {
         replay_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
+        timing_export_url: Option<String>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         timing_export_url: Option<String>,
     ) -> Self {
@@ -439,7 +441,7 @@ impl BankingStage {
                     log_messages_bytes_limit,
                     bank_forks,
                     prioritization_fee_cache,
-                    timing_export_url,
+            timing_export_url,
                 )
             }
         }
@@ -460,6 +462,7 @@ impl BankingStage {
         replay_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
         bank_forks: Arc<RwLock<BankForks>>,
+        timing_export_url: Option<String>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         timing_export_url: Option<String>,
     ) -> Self {
@@ -508,7 +511,6 @@ impl BankingStage {
                     num_threads,
                     log_messages_bytes_limit,
                     bank_forks,
-                    timing_export_url.clone(),
                 );
             }
             TransactionStructure::View => {
@@ -527,7 +529,6 @@ impl BankingStage {
                     num_threads,
                     log_messages_bytes_limit,
                     bank_forks,
-                    timing_export_url.clone(),
                 );
             }
         }
@@ -566,15 +567,27 @@ impl BankingStage {
                     export_url: url.clone(),
                     ..Default::default()
                 };
-                let timing_exporter = TimingExporter::new(config);
                 
-                Consumer::new_with_timing_exporter(
-                    committer.clone(),
-                    transaction_recorder.clone(),
-                    QosService::new(id),
-                    log_messages_bytes_limit,
-                    timing_exporter,
-                )
+                match TimingExporter::new(config) {
+                    Ok(timing_exporter) => {
+                        Consumer::new_with_timing_exporter(
+                            committer.clone(),
+                            transaction_recorder.clone(),
+                            QosService::new(id),
+                            log_messages_bytes_limit,
+                            timing_exporter,
+                        )
+                    }
+                    Err(e) => {
+                        warn!("Failed to initialize TimingExporter: {}. Continuing without timing export.", e);
+                        Consumer::new(
+                            committer.clone(),
+                            transaction_recorder.clone(),
+                            QosService::new(id),
+                            log_messages_bytes_limit,
+                        )
+                    }
+                }
             } else {
                 Consumer::new(
                     committer.clone(),
@@ -656,6 +669,7 @@ impl BankingStage {
         gossip_receiver: BankingPacketReceiver,
         decision_maker: DecisionMaker,
         bank_forks: Arc<RwLock<BankForks>>,
+        timing_export_url: Option<String>,
         committer: Committer,
         transaction_recorder: TransactionRecorder,
         log_messages_bytes_limit: Option<usize>,
