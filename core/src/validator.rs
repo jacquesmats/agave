@@ -2086,7 +2086,14 @@ fn load_blockstore(
         accounts_db_force_initial_clean: config.accounts_db_force_initial_clean,
         runtime_config: config.runtime_config.clone(),
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
-        timing_export_url: config.timing_export_url.clone(),
+        timing_exporter: config.timing_export_url.as_ref().and_then(|url| {
+            solana_ledger::timing_exporter::TimingExporter::new(url.clone(), None)
+                .map_err(|e| {
+                    warn!("Failed to create timing exporter: {}", e);
+                    e
+                })
+                .ok()
+        }),
         ..blockstore_processor::ProcessOptions::default()
     };
 

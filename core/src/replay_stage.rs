@@ -2269,7 +2269,7 @@ impl ReplayStage {
             false,
             log_messages_bytes_limit,
             prioritization_fee_cache,
-            None, // timing_export_url - not available in replay_stage context
+            None, // timing_exporter - not available in replay_stage context
         )?;
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;

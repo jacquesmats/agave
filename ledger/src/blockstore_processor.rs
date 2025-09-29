@@ -5,6 +5,7 @@ use {
         blockstore_meta::SlotMeta,
         entry_notifier_service::{EntryNotification, EntryNotifierSender},
         leader_schedule_cache::LeaderScheduleCache,
+        timing_exporter::{TimingExporter, TransactionTiming},
         transaction_balances::compile_collected_balances,
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
@@ -658,14 +659,11 @@ fn process_entries(
     batch_timing: &mut BatchExecutionTiming,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
-    timing_export_url: Option<&String>,
+    timing_exporter: Option<&TimingExporter>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
-
-    // POC: Track transaction count per slot for logging first 100
-    let mut tx_count_this_slot = 0;
     let slot = bank.slot();
     
     for (entry_index, ReplayEntry {
@@ -696,15 +694,11 @@ fn process_entries(
                 }
             }
             EntryType::Transactions(transactions) => {
-                // POC: Log first 100 transactions per slot with timing data
-                if timing_export_url.is_some() && tx_count_this_slot < 100 {
+                // Export transaction timing data via HTTP
+                if let Some(exporter) = timing_exporter {
                     let poh_tick = bank.tick_height();
                     
                     for (tx_idx, transaction) in transactions.iter().enumerate() {
-                        if tx_count_this_slot >= 100 {
-                            break;
-                        }
-                        
                         let accounts_read: Vec<String> = transaction
                             .message()
                             .account_keys()
@@ -723,14 +717,18 @@ fn process_entries(
                             .map(|(_, key)| key.to_string())
                             .collect();
                             
-                        let is_vote = transaction.is_simple_vote_transaction();
+                        let timing_data = TransactionTiming {
+                            signature: transaction.signature().to_string(),
+                            slot,
+                            poh_tick,
+                            entry_index: entry_index as u64,
+                            tx_index: tx_idx as u64,
+                            accounts_read,
+                            accounts_written,
+                            is_vote: transaction.is_simple_vote_transaction(),
+                        };
                         
-                        info!(
-                            "TX_TIMING: slot={}, poh_tick={}, entry_idx={}, tx_idx={}, sig={}, is_vote={}, accounts_read={:?}, accounts_written={:?}",
-                            slot, poh_tick, entry_index, tx_idx, transaction.signature(), is_vote, accounts_read, accounts_written
-                        );
-                        
-                        tx_count_this_slot += 1;
+                        exporter.export(timing_data);
                     }
                 }
                 
@@ -908,7 +906,7 @@ pub struct ProcessOptions {
     pub hash_overrides: Option<HashOverrides>,
     pub abort_on_invalid_block: bool,
     pub no_block_cost_limits: bool,
-    pub timing_export_url: Option<String>,
+    pub timing_exporter: Option<TimingExporter>,
 }
 
 pub fn test_process_blockstore(
@@ -1231,7 +1229,7 @@ fn confirm_full_slot(
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
         &ignored_prioritization_fee_cache,
-        opts.timing_export_url.as_ref(),
+        opts.timing_exporter.as_ref(),
     )?;
 
     timing.accumulate(&confirmation_timing.batch_execute.totals);
@@ -1571,7 +1569,7 @@ pub fn confirm_slot(
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
-    timing_export_url: Option<&String>,
+    timing_exporter: Option<&TimingExporter>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -1602,7 +1600,7 @@ pub fn confirm_slot(
         recyclers,
         log_messages_bytes_limit,
         prioritization_fee_cache,
-        timing_export_url,
+        timing_exporter,
     )
 }
 
@@ -1620,7 +1618,7 @@ fn confirm_slot_entries(
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
-    timing_export_url: Option<&String>,
+    timing_exporter: Option<&TimingExporter>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let ConfirmationTiming {
         confirmation_elapsed,
@@ -1763,7 +1761,7 @@ fn confirm_slot_entries(
         batch_execute_timing,
         log_messages_bytes_limit,
         prioritization_fee_cache,
-        timing_export_url,
+        timing_exporter,
     )
     .map_err(BlockstoreProcessorError::from);
     replay_timer.stop();
@@ -4948,7 +4946,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
-            None, // timing_export_url - not used in tests
+            None, // timing_exporter - not used in tests
         )
     }
 
@@ -5042,7 +5040,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
-            None, // timing_export_url - not used in tests
+            None, // timing_exporter - not used in tests
         )
         .unwrap();
         assert_eq!(progress.num_txs, 2);
@@ -5088,7 +5086,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
-            None, // timing_export_url - not used in tests
+            None, // timing_exporter - not used in tests
         )
         .unwrap();
         assert_eq!(progress.num_txs, 5);
