@@ -1663,4 +1663,14 @@ pub fn add_args<'a>(app: App<'a, 'a>, default_args: &'a DefaultArgs) -> App<'a, 
                 tpu-client-next is used by default.",
             ),
     )
+    .arg(
+        Arg::with_name("timing_export_url")
+            .long("timing-export-url")
+            .value_name("URL")
+            .takes_value(true)
+            .help(
+                "Export transaction timing data to this HTTP endpoint during replay. \
+                Enables microsecond-precision historical transaction analysis.",
+            ),
+    )
 }

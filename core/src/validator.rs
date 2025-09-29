@@ -293,6 +293,7 @@ pub struct ValidatorConfig {
     pub delay_leader_block_for_pending_fork: bool,
     pub use_tpu_client_next: bool,
     pub retransmit_xdp: Option<XdpConfig>,
+    pub timing_export_url: Option<String>,
 }
 
 impl Default for ValidatorConfig {
@@ -368,6 +369,7 @@ impl Default for ValidatorConfig {
             delay_leader_block_for_pending_fork: false,
             use_tpu_client_next: true,
             retransmit_xdp: None,
+            timing_export_url: None,
         }
     }
 }
@@ -2084,6 +2086,7 @@ fn load_blockstore(
         accounts_db_force_initial_clean: config.accounts_db_force_initial_clean,
         runtime_config: config.runtime_config.clone(),
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
+        timing_export_url: config.timing_export_url.clone(),
         ..blockstore_processor::ProcessOptions::default()
     };
 
