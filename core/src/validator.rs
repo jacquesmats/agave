@@ -570,6 +570,9 @@ pub struct Validator {
     // We don't wait for its JoinHandle here because ownership and shutdown
     // are managed elsewhere. This variable is intentionally unused.
     _tpu_client_next_runtime: Option<TokioRuntime>,
+    // TimingExporter is intentionally unused - it just needs to exist to keep the worker thread alive
+    #[allow(dead_code)]
+    timing_exporter: Option<solana_ledger::timing_exporter::TimingExporter>,
 }
 
 impl Validator {
@@ -783,6 +786,16 @@ impl Validator {
                 report_os_disk_stats: !config.no_os_disk_stats_reporting,
             },
         ));
+        
+        // Create timing exporter early so it persists throughout validator lifecycle
+        let timing_exporter = config.timing_export_url.as_ref().and_then(|url| {
+            solana_ledger::timing_exporter::TimingExporter::new(url.clone(), None)
+                .map_err(|e| {
+                    warn!("Failed to create timing exporter: {}", e);
+                    e
+                })
+                .ok()
+        });
 
         let (
             bank_forks,
@@ -809,6 +822,7 @@ impl Validator {
             accounts_update_notifier,
             transaction_notifier,
             entry_notifier,
+            timing_exporter.clone(),
         )
         .map_err(ValidatorError::Other)?;
 
@@ -1558,6 +1572,7 @@ impl Validator {
             wen_restart_repair_slots.clone(),
             slot_status_notifier,
             vote_connection_cache,
+            timing_exporter.clone(),
         )
         .map_err(ValidatorError::Other)?;
 
@@ -1717,6 +1732,7 @@ impl Validator {
             repair_quic_endpoints_runtime,
             repair_quic_endpoints_join_handle,
             _tpu_client_next_runtime: tpu_client_next_runtime,
+            timing_exporter: blockstore_process_options.timing_exporter.or(timing_exporter),
         })
     }
 
@@ -2040,6 +2056,7 @@ fn load_blockstore(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierArc>,
     entry_notifier: Option<EntryNotifierArc>,
+    timing_exporter: Option<solana_ledger::timing_exporter::TimingExporter>,
 ) -> Result<
     (
         Arc<RwLock<BankForks>>,
@@ -2086,14 +2103,7 @@ fn load_blockstore(
         accounts_db_force_initial_clean: config.accounts_db_force_initial_clean,
         runtime_config: config.runtime_config.clone(),
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
-        timing_exporter: config.timing_export_url.as_ref().and_then(|url| {
-            solana_ledger::timing_exporter::TimingExporter::new(url.clone(), None)
-                .map_err(|e| {
-                    warn!("Failed to create timing exporter: {}", e);
-                    e
-                })
-                .ok()
-        }),
+        timing_exporter,
         ..blockstore_processor::ProcessOptions::default()
     };
 

@@ -171,6 +171,7 @@ impl Tvu {
         wen_restart_repair_slots: Option<Arc<RwLock<Vec<Slot>>>>,
         slot_status_notifier: Option<SlotStatusNotifier>,
         vote_connection_cache: Arc<ConnectionCache>,
+        timing_exporter: Option<solana_ledger::timing_exporter::TimingExporter>,
     ) -> Result<Self, String> {
         let in_wen_restart = wen_restart_repair_slots.is_some();
 
@@ -341,6 +342,7 @@ impl Tvu {
             prioritization_fee_cache: prioritization_fee_cache.clone(),
             banking_tracer,
             snapshot_controller,
+            timing_exporter,
         };
 
         let voting_service = VotingService::new(
