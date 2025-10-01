@@ -274,7 +274,7 @@ pub struct ReplayStageConfig {
     pub prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     pub banking_tracer: Arc<BankingTracer>,
     pub snapshot_controller: Option<Arc<SnapshotController>>,
-    pub timing_exporter: Option<solana_ledger::timing_exporter::TimingExporter>,
+    pub timing_export_url: Option<String>,
 }
 
 pub struct ReplaySenders {
@@ -575,7 +575,7 @@ impl ReplayStage {
             prioritization_fee_cache,
             banking_tracer,
             snapshot_controller,
-            timing_exporter,
+            timing_export_url,
         } = config;
 
         let ReplaySenders {
@@ -612,7 +612,16 @@ impl ReplayStage {
             rpc_subscriptions.clone(),
         );
         let run_replay = move || {
-            let _ = &timing_exporter;
+            // Create TimingExporter from URL if provided
+            let timing_exporter = timing_export_url.as_ref().and_then(|url| {
+                info!("Creating timing exporter for ReplayStage with URL: {}", url);
+                solana_ledger::timing_exporter::TimingExporter::new(url.clone(), None)
+                    .map_err(|e| {
+                        warn!("Failed to create timing exporter in ReplayStage: {}", e);
+                        e
+                    })
+                    .ok()
+            });
             let verify_recyclers = VerifyRecyclers::default();
             let _exit = Finalizer::new(exit.clone());
             let mut identity_keypair = cluster_info.keypair().clone();
@@ -2274,7 +2283,7 @@ impl ReplayStage {
             false,
             log_messages_bytes_limit,
             prioritization_fee_cache,
-            timing_exporter,
+            timing_export_url,
         )?;
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
@@ -2973,7 +2982,7 @@ impl ReplayStage {
                             &verify_recyclers.clone(),
                             log_messages_bytes_limit,
                             prioritization_fee_cache,
-                            timing_exporter,
+                            timing_export_url,
                         );
                         replay_blockstore_time.stop();
                         replay_result.replay_result = Some(blockstore_result);
@@ -3064,7 +3073,7 @@ impl ReplayStage {
                     &verify_recyclers.clone(),
                     log_messages_bytes_limit,
                     prioritization_fee_cache,
-                    timing_exporter,
+                    timing_export_url,
                 );
                 replay_blockstore_time.stop();
                 replay_result.replay_result = Some(blockstore_result);
@@ -3436,7 +3445,7 @@ impl ReplayStage {
                     log_messages_bytes_limit,
                     &active_bank_slots,
                     prioritization_fee_cache,
-                    timing_exporter,
+                    timing_export_url,
                 )
             }
             ForkReplayMode::Serial | ForkReplayMode::Parallel(_) => active_bank_slots
@@ -3457,7 +3466,7 @@ impl ReplayStage {
                         log_messages_bytes_limit,
                         *bank_slot,
                         prioritization_fee_cache,
-                        timing_exporter,
+                        timing_export_url,
                     )
                 })
                 .collect(),
