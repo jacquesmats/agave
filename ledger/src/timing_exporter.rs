@@ -144,6 +144,10 @@ impl TimingExporter {
         // Increment sent counter
         self.stats.total_sent.fetch_add(1, Ordering::Relaxed);
         
+        // Extract values before moving timing
+        let slot = timing.slot;
+        let signature_preview = timing.signature.chars().take(12).collect::<String>();
+        
         // Try to send to channel - this is the ~100ns operation
         match self.sender.send(timing) {
             Ok(_) => {
@@ -151,7 +155,8 @@ impl TimingExporter {
             }
             Err(_) => {
                 // Channel is closed (worker thread ended) - log warning
-                warn!("Timing export channel closed, dropping transaction data");
+                warn!("Timing export channel closed, dropping transaction data (slot: {}, signature: {}...)", 
+                      slot, signature_preview);
                 self.stats.total_errors.fetch_add(1, Ordering::Relaxed);
             }
         }
@@ -194,9 +199,18 @@ impl HttpWorker {
     fn run(self) {
         info!("Timing export worker started");
         
+        // Set panic handler to prevent worker thread from dying silently
+        let panic_handler = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |panic_info| {
+            error!("Timing export worker panicked: {:?}", panic_info);
+            panic_handler(panic_info);
+        }));
+        
         let mut buffer = Vec::with_capacity(self.config.batch_size);
         let mut retry_delay_ms = self.config.retry_base_ms;
         let mut last_flush = Instant::now();
+        let mut consecutive_failures = 0;
+        const MAX_CONSECUTIVE_FAILURES: u32 = 10;
         
         loop {
             // Check for shutdown signal
@@ -218,15 +232,25 @@ impl HttpWorker {
                     if should_flush && !buffer.is_empty() {
                         match self.send_batch(&buffer) {
                             Ok(_) => {
-                                // Success - reset retry delay
+                                // Success - reset retry delay and failure count
                                 self.stats.total_exported.fetch_add(buffer.len() as u64, Ordering::Relaxed);
                                 retry_delay_ms = self.config.retry_base_ms;
+                                consecutive_failures = 0;
                                 debug!("Exported {} timing records", buffer.len());
                             }
                             Err(e) => {
                                 // Failure - increment error count and retry with backoff
                                 self.stats.total_errors.fetch_add(buffer.len() as u64, Ordering::Relaxed);
-                                warn!("Failed to export batch: {}", e);
+                                consecutive_failures += 1;
+                                warn!("Failed to export batch (failure #{}): {}", consecutive_failures, e);
+                                
+                                // Circuit breaker: if too many consecutive failures, drop data and continue
+                                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
+                                    error!("Too many consecutive failures ({}), dropping {} records and continuing", 
+                                           consecutive_failures, buffer.len());
+                                    buffer.clear(); // Drop the failed batch
+                                    consecutive_failures = 0; // Reset to try again later
+                                }
                                 
                                 // Exponential backoff
                                 thread::sleep(Duration::from_millis(retry_delay_ms));
@@ -309,6 +333,7 @@ impl HttpWorker {
 impl Drop for TimingExporter {
     /// Ensure worker thread is shutdown when dropping
     fn drop(&mut self) {
+        info!("TimingExporter being dropped - shutting down worker thread");
         self.shutdown();
     }
 }

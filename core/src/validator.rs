@@ -789,6 +789,7 @@ impl Validator {
         
         // Create timing exporter early so it persists throughout validator lifecycle
         let timing_exporter = config.timing_export_url.as_ref().and_then(|url| {
+            info!("Creating timing exporter for URL: {}", url);
             solana_ledger::timing_exporter::TimingExporter::new(url.clone(), None)
                 .map_err(|e| {
                     warn!("Failed to create timing exporter: {}", e);
@@ -1732,7 +1733,14 @@ impl Validator {
             repair_quic_endpoints_runtime,
             repair_quic_endpoints_join_handle,
             _tpu_client_next_runtime: tpu_client_next_runtime,
-            timing_exporter: blockstore_process_options.timing_exporter.or(timing_exporter),
+            timing_exporter: {
+                info!("Setting validator timing_exporter: blockstore_options has timing_exporter: {}, fallback timing_exporter: {}", 
+                      blockstore_process_options.timing_exporter.is_some(), timing_exporter.is_some());
+                // Drop the blockstore_process_options timing_exporter (it was cloned and used during processing)
+                // and use the original timing_exporter instead
+                drop(blockstore_process_options.timing_exporter);
+                timing_exporter
+            },
         })
     }
 
