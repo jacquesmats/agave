@@ -772,7 +772,7 @@ impl ReplayStage {
                     &replay_tx_thread_pool,
                     &prioritization_fee_cache,
                     &mut purge_repair_slot_counter,
-                    timing_exporter.as_ref(),
+                    timing_exporter,
                 );
                 replay_active_banks_time.stop();
 
@@ -2982,7 +2982,7 @@ impl ReplayStage {
                             &verify_recyclers.clone(),
                             log_messages_bytes_limit,
                             prioritization_fee_cache,
-                            timing_export_url,
+                            timing_exporter,
                         );
                         replay_blockstore_time.stop();
                         replay_result.replay_result = Some(blockstore_result);
@@ -3073,7 +3073,7 @@ impl ReplayStage {
                     &verify_recyclers.clone(),
                     log_messages_bytes_limit,
                     prioritization_fee_cache,
-                    timing_export_url,
+                    timing_exporter,
                 );
                 replay_blockstore_time.stop();
                 replay_result.replay_result = Some(blockstore_result);
@@ -3445,7 +3445,7 @@ impl ReplayStage {
                     log_messages_bytes_limit,
                     &active_bank_slots,
                     prioritization_fee_cache,
-                    timing_export_url,
+                    timing_exporter,
                 )
             }
             ForkReplayMode::Serial | ForkReplayMode::Parallel(_) => active_bank_slots
@@ -3466,7 +3466,7 @@ impl ReplayStage {
                         log_messages_bytes_limit,
                         *bank_slot,
                         prioritization_fee_cache,
-                        timing_export_url,
+                        timing_exporter,
                     )
                 })
                 .collect(),

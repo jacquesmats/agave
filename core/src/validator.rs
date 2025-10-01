@@ -809,8 +809,7 @@ impl Validator {
             &start_progress,
             accounts_update_notifier,
             transaction_notifier,
-            entry_notifier,
-            None, // Don't use timing exporter during initial blockstore processing
+            entry_notifier
         )
         .map_err(ValidatorError::Other)?;
 
