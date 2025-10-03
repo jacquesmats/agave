@@ -772,7 +772,7 @@ impl ReplayStage {
                     &replay_tx_thread_pool,
                     &prioritization_fee_cache,
                     &mut purge_repair_slot_counter,
-                    timing_exporter,
+                    timing_exporter.as_ref(),
                 );
                 replay_active_banks_time.stop();
 
@@ -2283,7 +2283,7 @@ impl ReplayStage {
             false,
             log_messages_bytes_limit,
             prioritization_fee_cache,
-            timing_export_url,
+            timing_exporter,
         )?;
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
