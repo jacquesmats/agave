@@ -24,6 +24,7 @@ pub struct TransactionTiming {
     pub accounts_read: Vec<String>,
     pub accounts_written: Vec<String>,
     pub is_vote: bool,           // Flag vote transactions separately
+    pub signer: String,          // Fee payer wallet address (transaction signer)
 }
 
 /// Configuration for timing export system

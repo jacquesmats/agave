@@ -726,6 +726,7 @@ fn process_entries(
                             accounts_read,
                             accounts_written,
                             is_vote: transaction.is_simple_vote_transaction(),
+                            signer: transaction.message().fee_payer().to_string(),
                         };
                         
                         exporter.export(timing_data);
