@@ -688,6 +688,7 @@ pub fn execute(
             Arc::new(AtomicBool::new(false)),
         )]
         .into(),
+        timing_export_url: matches.value_of("timing_export_url").map(|s| s.to_string()),
     };
 
     let reserved = validator_config

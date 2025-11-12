@@ -5,6 +5,7 @@ use {
         blockstore_meta::SlotMeta,
         entry_notifier_service::{EntryNotification, EntryNotifierSender},
         leader_schedule_cache::LeaderScheduleCache,
+        timing_exporter::{TimingExporter, TransactionTiming},
         transaction_balances::compile_collected_balances,
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
@@ -634,6 +635,7 @@ pub fn process_entries_for_tests(
         &mut batch_timing,
         None,
         &ignored_prioritization_fee_cache,
+        None, // timing_exporter - not used in tests
     );
 
     debug!("process_entries: {batch_timing:?}");
@@ -649,15 +651,17 @@ fn process_entries(
     batch_timing: &mut BatchExecutionTiming,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
+    timing_exporter: Option<&TimingExporter>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
-
-    for ReplayEntry {
+    let slot = bank.slot();
+    
+    for (entry_index, ReplayEntry {
         entry,
         starting_index,
-    } in entries
+    }) in entries.into_iter().enumerate()
     {
         match entry {
             EntryType::Tick(hash) => {
@@ -682,6 +686,45 @@ fn process_entries(
                 }
             }
             EntryType::Transactions(transactions) => {
+                // Export transaction timing data via HTTP
+                if let Some(exporter) = timing_exporter {
+                    let poh_tick = bank.tick_height();
+                    
+                    for (tx_idx, transaction) in transactions.iter().enumerate() {
+                        let accounts_read: Vec<String> = transaction
+                            .message()
+                            .account_keys()
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, _)| !transaction.message().is_writable(*i))
+                            .map(|(_, key)| key.to_string())
+                            .collect();
+                            
+                        let accounts_written: Vec<String> = transaction
+                            .message()
+                            .account_keys()
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, _)| transaction.message().is_writable(*i))
+                            .map(|(_, key)| key.to_string())
+                            .collect();
+                            
+                        let timing_data = TransactionTiming {
+                            signature: transaction.signature().to_string(),
+                            slot,
+                            poh_tick,
+                            entry_index: entry_index as u64,
+                            tx_index: tx_idx as u64,
+                            accounts_read,
+                            accounts_written,
+                            is_vote: transaction.is_simple_vote_transaction(),
+                            signer: transaction.message().fee_payer().to_string(),
+                        };
+                        
+                        exporter.export(timing_data);
+                    }
+                }
+                
                 queue_batches_with_lock_retry(
                     bank,
                     starting_index,
@@ -854,6 +897,7 @@ pub struct ProcessOptions {
     pub hash_overrides: Option<HashOverrides>,
     pub abort_on_invalid_block: bool,
     pub no_block_cost_limits: bool,
+    pub timing_exporter: Option<TimingExporter>,
 }
 
 pub fn test_process_blockstore(
@@ -1159,6 +1203,7 @@ fn confirm_full_slot(
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
         &ignored_prioritization_fee_cache,
+        opts.timing_exporter.as_ref(),
     )?;
 
     timing.accumulate(&confirmation_timing.batch_execute.totals);
@@ -1498,6 +1543,7 @@ pub fn confirm_slot(
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
+    timing_exporter: Option<&TimingExporter>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -1528,6 +1574,7 @@ pub fn confirm_slot(
         recyclers,
         log_messages_bytes_limit,
         prioritization_fee_cache,
+        timing_exporter,
     )
 }
 
@@ -1545,6 +1592,7 @@ fn confirm_slot_entries(
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
+    timing_exporter: Option<&TimingExporter>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let ConfirmationTiming {
         confirmation_elapsed,
@@ -1683,6 +1731,7 @@ fn confirm_slot_entries(
         batch_execute_timing,
         log_messages_bytes_limit,
         prioritization_fee_cache,
+        timing_exporter,
     )
     .map_err(BlockstoreProcessorError::from);
     replay_timer.stop();
@@ -4906,6 +4955,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
+            None, // timing_exporter - not used in tests
         )
     }
 
@@ -5000,6 +5050,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
+            None, // timing_exporter - not used in tests
         )
         .unwrap();
         assert_eq!(progress.num_txs, 2);
@@ -5045,6 +5096,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
+            None, // timing_exporter - not used in tests
         )
         .unwrap();
         assert_eq!(progress.num_txs, 5);

@@ -1551,6 +1551,13 @@ pub fn add_args<'a>(app: App<'a, 'a>, default_args: &'a DefaultArgs) -> App<'a, 
             .help("Maximum number of bytes written to the program log before truncation"),
     )
     .arg(
+        Arg::with_name("timing_export_url")
+            .long("timing-export-url")
+            .takes_value(true)
+            .value_name("URL")
+            .help("HTTP endpoint URL for exporting transaction timing data during replay"),
+    )
+    .arg(
         Arg::with_name("banking_trace_dir_byte_limit")
             // expose friendly alternative name to cli than internal
             // implementation-oriented one

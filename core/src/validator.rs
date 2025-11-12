@@ -301,6 +301,7 @@ pub struct ValidatorConfig {
     pub use_tpu_client_next: bool,
     pub retransmit_xdp: Option<XdpConfig>,
     pub repair_handler_type: RepairHandlerType,
+    pub timing_export_url: Option<String>,
 }
 
 impl ValidatorConfig {
@@ -382,6 +383,7 @@ impl ValidatorConfig {
             use_tpu_client_next: true,
             retransmit_xdp: None,
             repair_handler_type: RepairHandlerType::default(),
+            timing_export_url: None,
         }
     }
 
@@ -1540,6 +1542,7 @@ impl Validator {
                 replay_transactions_threads: config.replay_transactions_threads,
                 shred_sigverify_threads: config.tvu_shred_sigverify_threads,
                 xdp_sender: xdp_sender.clone(),
+                timing_export_url: config.timing_export_url.clone(),
             },
             &max_slots,
             block_metadata_notifier,
@@ -2091,6 +2094,9 @@ fn load_blockstore(
         accounts_db_force_initial_clean: config.accounts_db_force_initial_clean,
         runtime_config: config.runtime_config.clone(),
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
+        timing_exporter: config.timing_export_url.as_ref().and_then(|url| {
+            solana_ledger::timing_exporter::TimingExporter::new(url.clone(), None).ok()
+        }),
         ..blockstore_processor::ProcessOptions::default()
     };
 

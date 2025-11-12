@@ -286,6 +286,7 @@ pub struct ReplayStageConfig {
     pub prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     pub banking_tracer: Arc<BankingTracer>,
     pub snapshot_controller: Option<Arc<SnapshotController>>,
+    pub timing_export_url: Option<String>,
 }
 
 pub struct ReplaySenders {
@@ -586,6 +587,7 @@ impl ReplayStage {
             prioritization_fee_cache,
             banking_tracer,
             snapshot_controller,
+            timing_export_url,
         } = config;
 
         let ReplaySenders {
@@ -622,6 +624,16 @@ impl ReplayStage {
             rpc_subscriptions.clone(),
         );
         let run_replay = move || {
+            // Create TimingExporter from URL if provided
+            let timing_exporter = timing_export_url.as_ref().and_then(|url| {
+                info!("Creating timing exporter for ReplayStage with URL: {}", url);
+                solana_ledger::timing_exporter::TimingExporter::new(url.clone(), None)
+                    .map_err(|e| {
+                        warn!("Failed to create timing exporter in ReplayStage: {}", e);
+                        e
+                    })
+                    .ok()
+            });
             let verify_recyclers = VerifyRecyclers::default();
             let _exit = Finalizer::new(exit.clone());
             let mut identity_keypair = cluster_info.keypair();
@@ -768,6 +780,7 @@ impl ReplayStage {
                     &prioritization_fee_cache,
                     &mut purge_repair_slot_counter,
                     Some(&mut tbft_structs),
+                    timing_exporter.as_ref(),
                 );
                 replay_active_banks_time.stop();
 
@@ -2224,6 +2237,7 @@ impl ReplayStage {
         verify_recyclers: &VerifyRecyclers,
         log_messages_bytes_limit: Option<usize>,
         prioritization_fee_cache: &PrioritizationFeeCache,
+        timing_exporter: Option<&solana_ledger::timing_exporter::TimingExporter>,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let mut w_replay_stats = replay_stats.write().unwrap();
         let mut w_replay_progress = replay_progress.write().unwrap();
@@ -2245,6 +2259,7 @@ impl ReplayStage {
             false,
             log_messages_bytes_limit,
             prioritization_fee_cache,
+            timing_exporter,
         )?;
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
@@ -2871,6 +2886,7 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         active_bank_slots: &[Slot],
         prioritization_fee_cache: &PrioritizationFeeCache,
+        timing_exporter: Option<&solana_ledger::timing_exporter::TimingExporter>,
     ) -> Vec<ReplaySlotFromBlockstore> {
         // Make mutable shared structures thread safe.
         let progress = RwLock::new(progress);
@@ -2953,6 +2969,7 @@ impl ReplayStage {
                             &verify_recyclers.clone(),
                             log_messages_bytes_limit,
                             prioritization_fee_cache,
+                            timing_exporter,
                         );
                         replay_blockstore_time.stop();
                         replay_result.replay_result = Some(blockstore_result);
@@ -2986,6 +3003,7 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         bank_slot: Slot,
         prioritization_fee_cache: &PrioritizationFeeCache,
+        timing_exporter: Option<&solana_ledger::timing_exporter::TimingExporter>,
     ) -> ReplaySlotFromBlockstore {
         let mut replay_result = ReplaySlotFromBlockstore {
             is_slot_dead: false,
@@ -3042,6 +3060,7 @@ impl ReplayStage {
                     &verify_recyclers.clone(),
                     log_messages_bytes_limit,
                     prioritization_fee_cache,
+                    timing_exporter,
                 );
                 replay_blockstore_time.stop();
                 replay_result.replay_result = Some(blockstore_result);
@@ -3380,6 +3399,7 @@ impl ReplayStage {
         prioritization_fee_cache: &PrioritizationFeeCache,
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
         tbft_structs: Option<&mut TowerBFTStructures>,
+        timing_exporter: Option<&solana_ledger::timing_exporter::TimingExporter>,
     ) -> bool /* completed a bank */ {
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
         let num_active_banks = active_bank_slots.len();
@@ -3407,6 +3427,7 @@ impl ReplayStage {
                     log_messages_bytes_limit,
                     &active_bank_slots,
                     prioritization_fee_cache,
+                    timing_exporter,
                 )
             }
             ForkReplayMode::Serial | ForkReplayMode::Parallel(_) => active_bank_slots
@@ -3427,6 +3448,7 @@ impl ReplayStage {
                         log_messages_bytes_limit,
                         *bank_slot,
                         prioritization_fee_cache,
+                        timing_exporter,
                     )
                 })
                 .collect(),
@@ -5084,6 +5106,7 @@ pub(crate) mod tests {
                 &VerifyRecyclers::default(),
                 None,
                 &PrioritizationFeeCache::new(0u64),
+                None, // timing_exporter - not used in tests
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
